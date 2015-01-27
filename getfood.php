@@ -53,8 +53,8 @@
   function whitelisted($fooditem){
     $whitelist = array ( 'lecker und fein', 'gut und g', 'pizza', 
                          'pasta', 'schneller teller', 'wok und grill',
-                         'buffet', 'vegetarisch', 'bio', 'eintopf',
-                         'aktion', 'suppe','essen');
+                         'buffet', 'vegetarisch', 'bio', 'eintopfgerichte',
+                         'aktion', 'tagessuppe','suppen','wm 2014');
     foreach ( $whitelist as $wlElement )
       if ( strpos($fooditem, $wlElement) !== FALSE ) return true;
     return false;
@@ -110,11 +110,7 @@
       if ( strpos($a->href,"UL") !== false || 
            strpos($a->href,"Bistro") !== false || 
            strpos($a->href,"West") !== false || 
-           strpos($a->href,"CB") !== false || 
-           strpos($a->href,"Prittwitzstr") !== false //||
-           //strpos($a->href,"HL") !== false ||
-           //strpos($a->href,"OE") !== false 
-           )
+           strpos($a->href,"Prittwitzstr") !== false )
         array_push($urls,$domain.$a->href."\n");
     }
     return $urls;
@@ -160,7 +156,7 @@
 
   /*
    * Build the json array we need. If something is changed here, the XML output
-   * has to be changed too.
+   * has to be changed to.
    */
   function jsonify($json, $rowsNames ,$food, $mealPrice, 
                    $columns, $rows,$place,
@@ -243,12 +239,7 @@
     $bold = array(array());
     
     // load xml file
-    $site = simplexml_load_file($url);
-
-    if ( $site == "" ) {
-      echo "plan is broken, continue with next plan\ņ";
-      return $json; 
-    }
+    $site = simplexml_load_file($url);  
 
     /* get the elements that contain the needed data and ignore the ones that 
      * are empty
@@ -256,7 +247,6 @@
     $elements = $site->xpath("//text");
     
     // get positions of rows and columns – building table
-
     foreach ( $elements as $element ){
       $top = getStyleAttribute("top",$element);
       $left = getStyleAttribute("left",$element);
@@ -273,28 +263,18 @@
       // row detection by whitelisted meal categories 
       if ( $left < $posx && $top > $posy && $top < $maxposy) {    
         $tmp = $top-$buffer;
-        if ( $place != "CB" ){// this doesn't work with Cafeteria B as the meal
-                              // names are pictures.
-          if ( whitelisted(strtolower(filterHTML($text))) ){
-            array_push($rows, $tmp);  
-            array_push($rowsNames, $text);  
+        if ( whitelisted(strtolower(filterHTML($text))) ){
+          array_push($rows, $tmp);  
+          array_push($rowsNames, $text);  
+        } else {
+          if ( strpos($text,"€") !==false){
+            // there's a price in the title of the row. 
+            $rowPrice[sizeof($rowsNames)-1]=$text;
           } else {
-            if ( strpos($text,"€") !==false){
-              // there's a price in the title of the row. 
-              $rowPrice[sizeof($rowsNames)-1]=$text;
-            } else {
-              echo "$place: not found: (".$text.") <br/>\n";
-            }
+            echo "$place: not found: (".$text.") <br/>\n";
           }
         }
       }
-    }
-    
-    if ( $place == "CB" ) {// guessing positions for Cafeteria B
-      array_push($rows, 0);  
-      array_push($rowsNames, "Mensa Vital");  
-      array_push($rows, 520);  
-      array_push($rowsNames, "Aus Topf und Pfanne");  
     }
 
     // initialise arrays
@@ -305,8 +285,6 @@
          $mealPrice[$i][$j]="";
       }
     }
-
-    echo $place."\n";
 
     // get positions of elements and sort them to the right position
     foreach ( $elements as $element ){
@@ -354,8 +332,7 @@
       if ( strpos(filterHTML(getTextFromNode($element)),"€") !== false ){
         $mealPrice[$x][$y].=" ".filterHTML(getTextFromNode($element));
       } else {// if it's not a price, append it to the meal, 
-        if ( $place != "CB" || strpos(filterHTML(getTextFromNode($element)),"Kilojoule") === false )
-          $food[$x][$y] .= " " . filterHTML(getTextFromNode($element)); 
+        $food[$x][$y] .= " " . filterHTML(getTextFromNode($element)); 
       }      
     }
 
@@ -380,34 +357,26 @@
   // parse plans
   $t = 0;
   foreach ( $plansXML as $planXML ) {
+//    if (!file_exists($planXML)) continue;       // sometimes there is no xml b/c there were invalid links
     preg_match_all('/\d+/', $plans[$t], $matches);
     $calendarWeek = array_pop($matches[0]);
     $year = date("Y",time());
     $timestamp = strtotime($year."W".$calendarWeek);
     // cut out old weeks
-    if ($calendarWeek >= date("W",time())) {   
+    if ($calendarWeek >= date("W",time()) && file_exists($planXML)) {   
       // Mensa
-      if ( strpos($plans[$t], "UL") !== false && file_exists($planXML) ) {
-        $json=parsePlan($json,120,60,1000,1500,$timestamp,$calendarWeek,$planXML,"Mensa", 0);
+      if ( strpos($plans[$t], "UL") !== false ) {
+        $json=parsePlan($json,120,60,650,1500,$timestamp,$calendarWeek,$planXML,"Mensa", 0);
       // Bistro
-      } else if ( strpos($plans[$t], "Bistro") !== false && file_exists($planXML) ){
+      } else if ( strpos($plans[$t], "Bistro") !== false ){
         $json=parsePlan($json,120,120,630,1500,$timestamp,$calendarWeek,$planXML,"Bistro", 0);
       // Cafeteria West
-      } else if ( strpos($plans[$t], "West") !== false && file_exists($planXML) ){
-        $json=parsePlan($json,120,120,800,1500,$timestamp,$calendarWeek,$planXML,"West",100);
+      } else if ( strpos($plans[$t], "West") !== false ){
+        $json=parsePlan($json,120,120,800,1500,$timestamp,$calendarWeek,$planXML,"West",40);
       // Prittwitzstrasse
-      } else if ( strpos($plans[$t], "Prittwitzstr") !== false && file_exists($planXML) ){
+      } else if ( strpos($plans[$t], "Prittwitzstr") !== false ){
         $json=parsePlan($json,120,120,800,1500,$timestamp,$calendarWeek,$planXML,"Prittwitzstr",60);
-      //Hochschulleitung
-      //} else if ( strpos($plans[$t], "HL") !== false && file_exists($planXML) ){
-      //  $json=parsePlan($json,120,120,800,1500,$timestamp,$calendarWeek,$planXML,"Hochschulleitung",60);
-      // HS Oberer Eselsberg
-      //} else if ( strpos($plans[$t], "OE") !== false && file_exists($planXML) ){
-      //  $json=parsePlan($json,120,120,800,1500,$timestamp,$calendarWeek,$planXML,"HSOE",60);
-      // HS Oberer Eselsberg
-      } else if ( strpos($plans[$t], "CB") !== false && file_exists($planXML) ){
-        $json=parsePlan($json,190,250,1500,1500,$timestamp,$calendarWeek,$planXML,"CB",175);
-      }           
+      }            
     }
     $t++;
   }
